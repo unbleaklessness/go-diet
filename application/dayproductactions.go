@@ -58,3 +58,34 @@ func addTodayProduct(db *sql.DB) ierrori {
 
 	return nil
 }
+
+func removeTodayProduct(db *sql.DB) ierrori {
+
+	var (
+		name      string
+		e         error
+		thisError func(e error) ierrori
+	)
+
+	thisError = func(e error) ierrori {
+		return ierror{m: "Could not remove product from today", e: e}
+	}
+
+	fmt.Print("Name: ")
+	_, e = fmt.Scanln(&name)
+	if e != nil {
+		return thisError(e)
+	}
+
+	_, e = db.Exec(`delete from dayProducts
+		where id in
+		(select id from dayProducts
+			where productId in
+			(select id from products where name = $1)
+		limit 1)`, name)
+	if e != nil {
+		return thisError(e)
+	}
+
+	return nil
+}
