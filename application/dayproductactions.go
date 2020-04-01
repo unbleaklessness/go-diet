@@ -93,20 +93,21 @@ func removeTodayProduct(db *sql.DB) ierrori {
 func showTodayTotal(db *sql.DB) ierrori {
 
 	var (
-		t            day
-		e            error
-		products     []product
-		p            product
-		thisError    func(e error) ierrori
-		rows         *sql.Rows
-		totalProduct product
+		d         day
+		e         error
+		products  []product
+		p         product
+		thisError func(e error) ierrori
+		rows      *sql.Rows
+		total     product
+		norm      dailyNorm
 	)
 
 	thisError = func(e error) ierrori {
 		return ierror{m: "Could not show total for today", e: e}
 	}
 
-	t, e = today(db)
+	d, e = today(db)
 	if e != nil {
 		return thisError(e)
 	}
@@ -114,31 +115,47 @@ func showTodayTotal(db *sql.DB) ierrori {
 	rows, e = db.Query(`select kcals, proteins, carbs, fats
 		from products where id in
 		(select productId from dayProducts
-			where dayId = $1)`, t.id)
+			where dayId = $1)`, d.id)
+	if e != nil {
+		return thisError(e)
+	}
+
+	for rows.Next() {
+		e = rows.Scan(&p.kcals, &p.proteins, &p.carbs, &p.fats)
+		if e != nil {
+			rows.Close()
+			return thisError(e)
+		}
+		products = append(products, p)
+	}
+	rows.Close()
+
+	rows, e = db.Query(`select kcals, proteins, carbs, fats from dailyNorm limit 1`)
 	if e != nil {
 		return thisError(e)
 	}
 	defer rows.Close()
 
-	for rows.Next() {
-		e = rows.Scan(&p.kcals, &p.proteins, &p.carbs, &p.fats)
+	if rows.Next() {
+		e = rows.Scan(&norm.kcals, &norm.proteins, &norm.carbs, &norm.fats)
 		if e != nil {
 			return thisError(e)
 		}
-		products = append(products, p)
+	} else {
+		return thisError(nil)
 	}
 
 	for _, p = range products {
-		totalProduct.kcals += p.kcals
-		totalProduct.proteins += p.proteins
-		totalProduct.carbs += p.carbs
-		totalProduct.fats += p.fats
+		total.kcals += p.kcals
+		total.proteins += p.proteins
+		total.carbs += p.carbs
+		total.fats += p.fats
 	}
 
-	fmt.Println("Kcals:", totalProduct.kcals)
-	fmt.Println("Proteins:", totalProduct.proteins)
-	fmt.Println("Carbs:", totalProduct.carbs)
-	fmt.Println("Fats:", totalProduct.fats)
+	fmt.Printf("Kcals: %.2f, %.2f%% \n", total.kcals, total.kcals/norm.kcals)
+	fmt.Printf("Proteins: %.2f, %.2f%% \n", total.proteins, total.proteins/norm.proteins)
+	fmt.Printf("Carbs: %.2f, %.2f%% \n", total.carbs, total.carbs/norm.carbs)
+	fmt.Printf("Fats: %.2f, %.2f%% \n", total.fats, total.fats/norm.fats)
 
 	return nil
 }
