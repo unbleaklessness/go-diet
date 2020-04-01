@@ -89,3 +89,56 @@ func removeTodayProduct(db *sql.DB) ierrori {
 
 	return nil
 }
+
+func showTodayTotal(db *sql.DB) ierrori {
+
+	var (
+		t            day
+		e            error
+		products     []product
+		p            product
+		thisError    func(e error) ierrori
+		rows         *sql.Rows
+		totalProduct product
+	)
+
+	thisError = func(e error) ierrori {
+		return ierror{m: "Could not show total for today", e: e}
+	}
+
+	t, e = today(db)
+	if e != nil {
+		return thisError(e)
+	}
+
+	rows, e = db.Query(`select kcals, proteins, carbs, fats
+		from products where id in
+		(select productId from dayProducts
+			where dayId = $1)`, t.id)
+	if e != nil {
+		return thisError(e)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		e = rows.Scan(&p.kcals, &p.proteins, &p.carbs, &p.fats)
+		if e != nil {
+			return thisError(e)
+		}
+		products = append(products, p)
+	}
+
+	for _, p = range products {
+		totalProduct.kcals += p.kcals
+		totalProduct.proteins += p.proteins
+		totalProduct.carbs += p.carbs
+		totalProduct.fats += p.fats
+	}
+
+	fmt.Println("Kcals:", totalProduct.kcals)
+	fmt.Println("Proteins:", totalProduct.proteins)
+	fmt.Println("Carbs:", totalProduct.carbs)
+	fmt.Println("Fats:", totalProduct.fats)
+
+	return nil
+}
