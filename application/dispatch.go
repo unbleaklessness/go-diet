@@ -46,6 +46,11 @@ func dispatch(db *sql.DB, flags flags) ierrori {
 		if ie != nil {
 			return ie
 		}
+	} else if flags.norm && flags.list {
+		ie = showDailyNorm(db)
+		if ie != nil {
+			return ie
+		}
 	} else {
 		return ierror{m: "Unkown flag combination"}
 	}
