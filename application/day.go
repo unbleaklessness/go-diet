@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"time"
 )
 
 type day struct {
@@ -10,56 +9,36 @@ type day struct {
 	date string
 }
 
-func now() string {
-	return time.Now().Format("2006-01-02")
-}
+func today(db *sql.DB) (day, ierrori) {
 
-func createToday(db *sql.DB) (ie *ierror) {
-	_, e := db.Exec(`insert or ignore into days (date) values ($1)`, now())
-	if e != nil {
-		ie = &ierror{m: "Could not create today", e: e}
-		return
+	var (
+		e         error
+		rows      *sql.Rows
+		d         day
+		thisError func(e error) (day, ierrori)
+	)
+
+	thisError = func(e error) (day, ierrori) {
+		return d, ierror{m: "Could not get today", e: e}
 	}
-	return
-}
 
-func selectToday(db *sql.DB) (d day, ie *ierror) {
-	rows, e := db.Query(`select id, date from days where date = $1`, now())
+	_, e = db.Exec(`insert or ignore into days (date) values ($1)`, now())
 	if e != nil {
-		ie = &ierror{m: "Could not select today", e: e}
-		return
+		return thisError(e)
+	}
+
+	rows, e = db.Query(`select id, date from days where date = $1`, now())
+	if e != nil {
+		return thisError(e)
 	}
 	defer rows.Close()
 
 	if rows.Next() {
-
 		e = rows.Scan(&d.id, &d.date)
 		if e != nil {
-			ie = &ierror{m: "Could not scan today", e: e}
-			return
+			return thisError(e)
 		}
-
-		return
 	}
 
-	ie = &ierror{m: "Could not find today", e: e}
-	return
-}
-
-func today(db *sql.DB) day {
-	exit := func() {
-		panic("Could not get today")
-	}
-
-	ie := createToday(db)
-	if ie != nil {
-		exit()
-	}
-
-	d, ie := selectToday(db)
-	if ie != nil {
-		exit()
-	}
-
-	return d
+	return d, nil
 }

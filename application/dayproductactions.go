@@ -5,26 +5,56 @@ import (
 	"fmt"
 )
 
-func addTodayProduct(db *sql.DB) (ie *ierror) {
-	var name string
+func addTodayProduct(db *sql.DB) ierrori {
+
+	var (
+		e         error
+		rows      *sql.Rows
+		d         day
+		p         product
+		name      string
+		thisError func(e error) ierrori
+	)
+
+	thisError = func(e error) ierrori {
+		return ierror{m: "Could not add a product for today", e: e}
+	}
+
 	fmt.Print("Name: ")
-	_, e := fmt.Scanln(&name)
+	_, e = fmt.Scanln(&name)
 	if e != nil {
-		ie = &ierror{m: "Could not read product name", e: e}
-		return
+		return thisError(e)
 	}
 
-	p, ie := selectProductByName(db, name)
-	if ie != nil {
-		return
-	}
-
-	t := today(db)
-	_, e = db.Exec(`insert into dayProducts (dayId, productId) values ($1, $2)`, t.id, p.id)
+	rows, e = db.Query(`select
+		id, name, kcals, proteins, carbs, fats
+		from products
+		where name = $1
+	`, name)
 	if e != nil {
-		ie = &ierror{m: "Could not create today product", e: e}
-		return
+		return thisError(e)
 	}
 
-	return
+	if rows.Next() {
+		e = rows.Scan(&p.id, &p.name, &p.kcals, &p.proteins, &p.carbs, &p.fats)
+		if e != nil {
+			return thisError(e)
+		}
+	} else {
+		rows.Close()
+		return thisError(nil)
+	}
+	rows.Close()
+
+	d, e = today(db)
+	if e != nil {
+		return thisError(e)
+	}
+
+	_, e = db.Exec(`insert into dayProducts (dayId, productId) values ($1, $2)`, d.id, p.id)
+	if e != nil {
+		return thisError(e)
+	}
+
+	return nil
 }

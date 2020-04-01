@@ -12,51 +12,65 @@ type dailyNorm struct {
 	fats     float32
 }
 
-func scanDailyNorm() (d dailyNorm, e error) {
+func scanDailyNorm() (dailyNorm, error) {
+
+	var (
+		d         dailyNorm
+		e         error
+		thisError func(e error) (dailyNorm, ierrori)
+	)
+
+	thisError = func(e error) (dailyNorm, ierrori) {
+		return d, ierror{m: "Could not scan daily norm", e: e}
+	}
 
 	fmt.Print("Kcals: ")
 	_, e = fmt.Scanln(&d.kcals)
 	if e != nil {
-		return
+		return thisError(e)
 	}
 
 	fmt.Print("Proteins: ")
 	_, e = fmt.Scanln(&d.proteins)
 	if e != nil {
-		return
+		return thisError(e)
 	}
 
 	fmt.Print("Carbs: ")
 	_, e = fmt.Scanln(&d.carbs)
 	if e != nil {
-		return
+		return thisError(e)
 	}
 
 	fmt.Print("Fats: ")
 	_, e = fmt.Scanln(&d.fats)
 	if e != nil {
-		return
+		return thisError(e)
 	}
 
-	return
+	return d, nil
 }
 
-func removeDailyNorm(db *sql.DB) (e error) {
+func addDailyNorm(db *sql.DB) ierrori {
+
+	var (
+		e         error
+		thisError func(e error) ierrori
+		d         dailyNorm
+	)
+
+	thisError = func(e error) ierrori {
+		return ierror{m: "Could not add daily norm", e: e}
+	}
+
 	_, e = db.Exec(`delete from dailyNorm`)
-	return
-}
-
-func addDailyNorm(db *sql.DB) (ie *ierror) {
-	e := removeDailyNorm(db)
 	if e != nil {
-		ie = &ierror{m: "Could not delete old daily norm", e: e}
-		return
+		return thisError(e)
 	}
 
-	d, e := scanDailyNorm()
+	d, e = scanDailyNorm()
 	if e != nil {
-		ie = &ierror{m: "Failed to read daily norm", e: e}
-		return
+		return thisError(e)
 	}
 
 	_, e = db.Exec(`insert into dailyNorm
@@ -65,9 +79,8 @@ func addDailyNorm(db *sql.DB) (ie *ierror) {
 		($1, $2, $3, $4)
 	`, d.kcals, d.proteins, d.carbs, d.fats)
 	if e != nil {
-		ie = &ierror{m: "Could not create a new daily norm", e: e}
-		return
+		return thisError(e)
 	}
 
-	return
+	return nil
 }

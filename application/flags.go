@@ -14,35 +14,67 @@ type flags struct {
 
 func initializeFlags() flags {
 
-	productFlagUsage := "Action with products"
-	productLong := flag.Bool("product", false, productFlagUsage)
-	productShort := flag.Bool("p", false, productFlagUsage)
+	var (
+		f flags
 
-	addFlagUsage := "Add an item"
-	addLong := flag.Bool("add", false, addFlagUsage)
-	addShort := flag.Bool("a", false, addFlagUsage)
+		productFlagUsage string
+		productLong      *bool
+		productShort     *bool
 
-	nameFlagUsage := "Name of an item"
-	nameLong := flag.String("name", "", nameFlagUsage)
-	nameShort := flag.String("n", "", nameFlagUsage)
+		addFlagUsage string
+		addLong      *bool
+		addShort     *bool
 
-	listFlagUsage := "List items"
-	listLong := flag.Bool("list", false, listFlagUsage)
-	listShort := flag.Bool("l", false, listFlagUsage)
+		nameFlagUsage string
+		nameLong      *string
+		nameShort     *string
 
-	todayFlagUsage := "Action with today"
-	todayLong := flag.Bool("today", false, todayFlagUsage)
-	todayShort := flag.Bool("t", false, todayFlagUsage)
+		listFlagUsage string
+		listLong      *bool
+		listShort     *bool
 
-	normUsage := "Action with daily norm"
-	norm := flag.Bool("norm", false, normUsage)
+		todayFlagUsage string
+		todayLong      *bool
+		todayShort     *bool
+
+		normUsage string
+		norm      *bool
+
+		product bool
+		add     bool
+		list    bool
+		today   bool
+	)
+
+	productFlagUsage = "Action with products"
+	productLong = flag.Bool("product", false, productFlagUsage)
+	productShort = flag.Bool("p", false, productFlagUsage)
+
+	addFlagUsage = "Add an item"
+	addLong = flag.Bool("add", false, addFlagUsage)
+	addShort = flag.Bool("a", false, addFlagUsage)
+
+	nameFlagUsage = "Name of an item"
+	nameLong = flag.String("name", "", nameFlagUsage)
+	nameShort = flag.String("n", "", nameFlagUsage)
+
+	listFlagUsage = "List items"
+	listLong = flag.Bool("list", false, listFlagUsage)
+	listShort = flag.Bool("l", false, listFlagUsage)
+
+	todayFlagUsage = "Action with today"
+	todayLong = flag.Bool("today", false, todayFlagUsage)
+	todayShort = flag.Bool("t", false, todayFlagUsage)
+
+	normUsage = "Action with daily norm"
+	norm = flag.Bool("norm", false, normUsage)
 
 	flag.Parse()
 
-	product := *productLong || *productShort
-	add := *addLong || *addShort
-	list := *listLong || *listShort
-	today := *todayLong || *todayShort
+	product = *productLong || *productShort
+	add = *addLong || *addShort
+	list = *listLong || *listShort
+	today = *todayLong || *todayShort
 
 	var name string
 	if len(*nameLong) > 0 {
@@ -51,13 +83,13 @@ func initializeFlags() flags {
 		name = *nameShort
 	}
 
-	return flags{
-		product: product,
-		add:     add,
-		name:    name,
-		list:    list,
-		today:   today,
-		norm:    *norm,
-		rest:    flag.Args(),
-	}
+	f.product = product
+	f.add = add
+	f.name = name
+	f.list = list
+	f.today = today
+	f.norm = *norm
+	f.rest = flag.Args()
+
+	return f
 }

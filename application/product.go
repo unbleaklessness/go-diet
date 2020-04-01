@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 )
 
@@ -14,66 +13,47 @@ type product struct {
 	fats     float32
 }
 
-func scanProduct() (p product, e error) {
+func scanProduct() (product, error) {
+
+	var (
+		p         product
+		e         error
+		thisError func(e error) (product, error)
+	)
+
+	thisError = func(e error) (product, error) {
+		return p, ierror{m: "Could no scan product", e: e}
+	}
 
 	fmt.Print("Name: ")
 	_, e = fmt.Scanln(&p.name)
 	if e != nil {
-		return
+		return thisError(e)
 	}
 
 	fmt.Print("Kcals: ")
 	_, e = fmt.Scanln(&p.kcals)
 	if e != nil {
-		return
+		return thisError(e)
 	}
 
 	fmt.Print("Proteins: ")
 	_, e = fmt.Scanln(&p.proteins)
 	if e != nil {
-		return
+		return thisError(e)
 	}
 
 	fmt.Print("Carbs: ")
 	_, e = fmt.Scanln(&p.carbs)
 	if e != nil {
-		return
+		return thisError(e)
 	}
 
 	fmt.Print("Fats: ")
 	_, e = fmt.Scanln(&p.fats)
 	if e != nil {
-		return
+		return thisError(e)
 	}
 
-	return
-}
-
-func selectProductByName(db *sql.DB, name string) (p product, ie *ierror) {
-	exit := func(e error) {
-		ie = &ierror{m: "Could not find product by name", e: e}
-	}
-
-	rows, e := db.Query(`select
-		id, name, kcals, proteins, carbs, fats
-		from products
-		where name = $1
-	`, name)
-	if e != nil {
-		exit(e)
-		return
-	}
-	defer rows.Close()
-
-	if rows.Next() {
-		e = rows.Scan(&p.id, &p.name, &p.kcals, &p.proteins, &p.carbs, &p.fats)
-		if e != nil {
-			exit(e)
-			return
-		}
-		return
-	}
-
-	exit(nil)
-	return
+	return p, nil
 }
