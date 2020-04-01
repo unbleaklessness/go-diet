@@ -26,6 +26,11 @@ func dispatch(db *sql.DB, flags flags) ierrori {
 		if ie != nil {
 			return ie
 		}
+	} else if flags.product && flags.remove {
+		ie = removeProduct(db)
+		if ie != nil {
+			return ie
+		}
 	} else {
 		return ierror{m: "Unkown flag combination"}
 	}

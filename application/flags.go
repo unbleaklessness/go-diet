@@ -9,6 +9,7 @@ type flags struct {
 	list    bool
 	today   bool
 	norm    bool
+	remove  bool
 	rest    []string
 }
 
@@ -40,10 +41,15 @@ func initializeFlags() flags {
 		normUsage string
 		norm      *bool
 
+		removeFlagUsage string
+		removeLong      *bool
+		removeShort     *bool
+
 		product bool
 		add     bool
 		list    bool
 		today   bool
+		remove  bool
 	)
 
 	productFlagUsage = "Action with products"
@@ -69,12 +75,17 @@ func initializeFlags() flags {
 	normUsage = "Action with daily norm"
 	norm = flag.Bool("norm", false, normUsage)
 
+	removeFlagUsage = "Remove an item"
+	removeLong = flag.Bool("remove", false, removeFlagUsage)
+	removeShort = flag.Bool("r", false, removeFlagUsage)
+
 	flag.Parse()
 
 	product = *productLong || *productShort
 	add = *addLong || *addShort
 	list = *listLong || *listShort
 	today = *todayLong || *todayShort
+	remove = *removeLong || *removeShort
 
 	var name string
 	if len(*nameLong) > 0 {
@@ -89,6 +100,7 @@ func initializeFlags() flags {
 	f.list = list
 	f.today = today
 	f.norm = *norm
+	f.remove = remove
 	f.rest = flag.Args()
 
 	return f
