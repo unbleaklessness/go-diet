@@ -58,11 +58,11 @@ func listProducts(db *sql.DB) ierrori {
 
 	n = len(products) - 1
 	for i, p = range products {
-		fmt.Printf("Name: %s \n", p.name)
-		fmt.Printf("Kcals: %f \n", p.kcals)
-		fmt.Printf("Proteins: %f \n", p.proteins)
-		fmt.Printf("Carbs: %f \n", p.carbs)
-		fmt.Printf("Fats: %f \n", p.fats)
+		fmt.Println("Name:", p.name)
+		fmt.Println("Kcals:", p.kcals)
+		fmt.Println("Proteins:", p.proteins)
+		fmt.Println("Carbs:", p.carbs)
+		fmt.Println("Fats:", p.fats)
 		if i != n {
 			fmt.Println()
 		}
