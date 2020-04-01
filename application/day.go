@@ -33,11 +33,13 @@ func today(db *sql.DB) (day, ierrori) {
 	}
 	defer rows.Close()
 
-	if rows.Next() {
-		e = rows.Scan(&d.id, &d.date)
-		if e != nil {
-			return thisError(e)
-		}
+	if !rows.Next() {
+		return thisError(nil)
+	}
+
+	e = rows.Scan(&d.id, &d.date)
+	if e != nil {
+		return thisError(e)
 	}
 
 	return d, nil

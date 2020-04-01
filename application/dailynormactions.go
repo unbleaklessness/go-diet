@@ -84,3 +84,39 @@ func addDailyNorm(db *sql.DB) ierrori {
 
 	return nil
 }
+
+func showDailyNorm(db *sql.DB) ierrori {
+
+	var (
+		e         error
+		rows      *sql.Rows
+		thisError func(e error) ierrori
+		norm      dailyNorm
+	)
+
+	thisError = func(e error) ierrori {
+		return &ierror{m: "Could not show daily norm", e: e}
+	}
+
+	rows, e = db.Query(`select kcals, proteins, carbs, fats from dailyNorm limit 1`)
+	if e != nil {
+		return thisError(e)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return thisError(nil)
+	}
+
+	e = rows.Scan(&norm.kcals, &norm.proteins, &norm.carbs, &norm.fats)
+	if e != nil {
+		return thisError(e)
+	}
+
+	fmt.Println("Kcals:", norm.kcals)
+	fmt.Println("Proteins:", norm.proteins)
+	fmt.Println("Carbs:", norm.carbs)
+	fmt.Println("Fats:", norm.fats)
+
+	return nil
+}

@@ -35,14 +35,14 @@ func addTodayProduct(db *sql.DB) ierrori {
 		return thisError(e)
 	}
 
-	if rows.Next() {
-		e = rows.Scan(&p.id, &p.name, &p.kcals, &p.proteins, &p.carbs, &p.fats)
-		if e != nil {
-			return thisError(e)
-		}
-	} else {
+	if !rows.Next() {
 		rows.Close()
 		return thisError(nil)
+	}
+
+	e = rows.Scan(&p.id, &p.name, &p.kcals, &p.proteins, &p.carbs, &p.fats)
+	if e != nil {
+		return thisError(e)
 	}
 	rows.Close()
 
@@ -136,13 +136,13 @@ func showTodayTotal(db *sql.DB) ierrori {
 	}
 	defer rows.Close()
 
-	if rows.Next() {
-		e = rows.Scan(&norm.kcals, &norm.proteins, &norm.carbs, &norm.fats)
-		if e != nil {
-			return thisError(e)
-		}
-	} else {
+	if !rows.Next() {
 		return thisError(nil)
+	}
+
+	e = rows.Scan(&norm.kcals, &norm.proteins, &norm.carbs, &norm.fats)
+	if e != nil {
+		return thisError(e)
 	}
 
 	for _, p = range products {
