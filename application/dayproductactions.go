@@ -142,3 +142,48 @@ func showTodayTotal(db *sql.DB) ierrori {
 
 	return nil
 }
+
+func listTodayProducts(db *sql.DB) ierrori {
+
+	var (
+		t            day
+		e            error
+		productNames []string
+		name         string
+		thisError    func(e error) ierrori
+		rows         *sql.Rows
+		i            int
+	)
+
+	thisError = func(e error) ierrori {
+		return ierror{m: "Could not list today products", e: e}
+	}
+
+	t, e = today(db)
+	if e != nil {
+		return thisError(e)
+	}
+
+	rows, e = db.Query(`select name
+		from products where id in
+		(select productId from dayProducts
+			where dayId = $1)`, t.id)
+	if e != nil {
+		return thisError(e)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		e = rows.Scan(&name)
+		if e != nil {
+			return thisError(e)
+		}
+		productNames = append(productNames, name)
+	}
+
+	for i, name = range productNames {
+		fmt.Println(i+1, "-", name)
+	}
+
+	return nil
+}
