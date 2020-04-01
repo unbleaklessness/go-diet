@@ -5,11 +5,16 @@ import (
 	"fmt"
 )
 
-func addProduct(db *sql.DB) (ie *ierror) {
-	p, e := scanProduct()
+func addProduct(db *sql.DB) ierrori {
+
+	var (
+		p product
+		e error
+	)
+
+	p, e = scanProduct()
 	if e != nil {
-		ie = &ierror{m: "Could not add product", e: e}
-		return
+		return ierror{m: "Could not add product", e: e}
 	}
 
 	db.Exec(`insert into products
@@ -18,17 +23,41 @@ func addProduct(db *sql.DB) (ie *ierror) {
 		($1, $2, $3, $4, $5)
 	`, p.name, p.kcals, p.proteins, p.carbs, p.fats)
 
-	return
+	return nil
 }
 
-func listProducts(db *sql.DB) (ie *ierror) {
-	ps, e := selectProducts(db)
-	if e != nil {
-		ie = &ierror{m: "Could not list products", e: e}
-		return
+func listProducts(db *sql.DB) ierrori {
+
+	var (
+		e         error
+		rows      *sql.Rows
+		n         int
+		i         int
+		thisError func(e error) ierrori
+		p         product
+	)
+
+	thisError = func(e error) ierrori {
+		return ierror{m: "Could not list products", e: e}
 	}
-	n := len(ps) - 1
-	for i, p := range ps {
+
+	rows, e = db.Query(`select id, name, kcals, proteins, carbs, fats from products`)
+	if e != nil {
+		return thisError(e)
+	}
+	defer rows.Close()
+
+	var products []product
+	for rows.Next() {
+		e = rows.Scan(&p.id, &p.name, &p.kcals, &p.proteins, &p.carbs, &p.fats)
+		if e != nil {
+			return thisError(e)
+		}
+		products = append(products, p)
+	}
+
+	n = len(products) - 1
+	for i, p = range products {
 		fmt.Printf("Name: %s \n", p.name)
 		fmt.Printf("Kcals: %f \n", p.kcals)
 		fmt.Printf("Proteins: %f \n", p.proteins)
@@ -38,5 +67,6 @@ func listProducts(db *sql.DB) (ie *ierror) {
 			fmt.Println()
 		}
 	}
-	return
+
+	return nil
 }
