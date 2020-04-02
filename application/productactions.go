@@ -8,20 +8,28 @@ import (
 func addProduct(db *sql.DB) ierrori {
 
 	var (
-		p product
-		e error
+		p         product
+		e         error
+		thisError func(e error) ierrori
 	)
 
-	p, e = scanProduct()
-	if e != nil {
+	thisError = func(e error) ierrori {
 		return ierror{m: "Could not add product", e: e}
 	}
 
-	db.Exec(`insert into products
+	p, e = scanProduct()
+	if e != nil {
+		return thisError(e)
+	}
+
+	_, e = db.Exec(`insert into products
 		(name, kcals, proteins, carbs, fats)
 		values
 		($1, $2, $3, $4, $5)
 	`, p.name, p.kcals, p.proteins, p.carbs, p.fats)
+	if e != nil {
+		return thisError(e)
+	}
 
 	return nil
 }
