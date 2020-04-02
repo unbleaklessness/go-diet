@@ -13,6 +13,7 @@ func addTodayProduct(db *sql.DB) ierrori {
 		d         day
 		p         product
 		name      string
+		amount    float32
 		thisError func(e error) ierrori
 	)
 
@@ -22,6 +23,12 @@ func addTodayProduct(db *sql.DB) ierrori {
 
 	fmt.Print("Name: ")
 	_, e = fmt.Scanln(&name)
+	if e != nil {
+		return thisError(e)
+	}
+
+	fmt.Print("Amount: ")
+	_, e = fmt.Scanln(&amount)
 	if e != nil {
 		return thisError(e)
 	}
@@ -51,7 +58,7 @@ func addTodayProduct(db *sql.DB) ierrori {
 		return thisError(e)
 	}
 
-	_, e = db.Exec(`insert into dayProducts (dayId, productId) values ($1, $2)`, d.id, p.id)
+	_, e = db.Exec(`insert into dayProducts (dayId, productId, amount) values ($1, $2, $3)`, d.id, p.id, amount)
 	if e != nil {
 		return thisError(e)
 	}

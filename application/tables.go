@@ -28,7 +28,8 @@ func createTables(db *sql.DB) (e error) {
 	_, e = db.Exec(`create table if not exists dayProducts (
 		id integer primary key autoincrement,
 		dayId integer not null,
-		productId integer not null
+		productId integer not null,
+		amount real not null
 	)`)
 	if e != nil {
 		return
