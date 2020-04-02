@@ -168,10 +168,10 @@ func showTodayTotal(db *sql.DB) ierrori {
 		total.fats += (p.fats / 100) * amounts[i]
 	}
 
-	fmt.Printf("Kcals: %.2f, %.2f%% \n", total.kcals, (norm.kcals*100)/total.kcals)
-	fmt.Printf("Proteins: %.2f, %.2f%% \n", total.proteins, (norm.proteins*100)/total.proteins)
-	fmt.Printf("Carbs: %.2f, %.2f%% \n", total.carbs, (norm.carbs*100)/total.carbs)
-	fmt.Printf("Fats: %.2f, %.2f%% \n", total.fats, (norm.fats*100)/total.fats)
+	fmt.Printf("Kcals: %.1f, %.1f%% \n", total.kcals, (norm.kcals*100)/total.kcals)
+	fmt.Printf("Proteins: %.1f, %.1f%% \n", total.proteins, (norm.proteins*100)/total.proteins)
+	fmt.Printf("Carbs: %.1f, %.1f%% \n", total.carbs, (norm.carbs*100)/total.carbs)
+	fmt.Printf("Fats: %.1f, %.1f%% \n", total.fats, (norm.fats*100)/total.fats)
 
 	return nil
 }
@@ -182,6 +182,8 @@ func listTodayProducts(db *sql.DB) ierrori {
 		t            day
 		e            error
 		productNames []string
+		amounts      []float32
+		amount       float32
 		name         string
 		thisError    func(e error) ierrori
 		rows         *sql.Rows
@@ -197,25 +199,31 @@ func listTodayProducts(db *sql.DB) ierrori {
 		return thisError(e)
 	}
 
-	rows, e = db.Query(`select name
-		from products where id in
-		(select productId from dayProducts
-			where dayId = $1)`, t.id)
+	rows, e = db.Query(`select p.name, dp.amount
+		from products p
+		inner join dayProducts dp
+		on p.id = dp.productId
+		and (dp.dayId = $1)`, t.id)
 	if e != nil {
 		return thisError(e)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		e = rows.Scan(&name)
+		e = rows.Scan(&name, &amount)
 		if e != nil {
 			return thisError(e)
 		}
 		productNames = append(productNames, name)
+		amounts = append(amounts, amount)
+	}
+
+	if len(productNames) != len(amounts) {
+		return thisError(nil)
 	}
 
 	for i, name = range productNames {
-		fmt.Println(i+1, "-", name)
+		fmt.Printf("%d) %s, %.1f grams\n", i+1, name, amounts[i])
 	}
 
 	return nil
