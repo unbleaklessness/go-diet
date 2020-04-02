@@ -11,6 +11,7 @@ type flags struct {
 	norm    bool
 	remove  bool
 	total   bool
+	find    bool
 	rest    []string
 }
 
@@ -49,11 +50,16 @@ func initializeFlags() flags {
 		totalFlagUsage string
 		total          *bool
 
+		findFlagUsage string
+		findLong      *bool
+		findShort     *bool
+
 		product bool
 		add     bool
 		list    bool
 		today   bool
 		remove  bool
+		find    bool
 	)
 
 	productFlagUsage = "Action with products"
@@ -86,6 +92,10 @@ func initializeFlags() flags {
 	totalFlagUsage = "Show total"
 	total = flag.Bool("total", false, totalFlagUsage)
 
+	findFlagUsage = "Find an item"
+	findLong = flag.Bool("find", false, findFlagUsage)
+	findShort = flag.Bool("f", false, findFlagUsage)
+
 	flag.Parse()
 
 	product = *productLong || *productShort
@@ -93,6 +103,7 @@ func initializeFlags() flags {
 	list = *listLong || *listShort
 	today = *todayLong || *todayShort
 	remove = *removeLong || *removeShort
+	find = *findLong || *findShort
 
 	var name string
 	if len(*nameLong) > 0 {
@@ -109,6 +120,7 @@ func initializeFlags() flags {
 	f.norm = *norm
 	f.remove = remove
 	f.total = *total
+	f.find = find
 	f.rest = flag.Args()
 
 	return f
