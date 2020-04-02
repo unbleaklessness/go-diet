@@ -57,3 +57,12 @@ func scanProduct() (product, error) {
 
 	return p, nil
 }
+
+func printProduct(p product) {
+
+	fmt.Println("Name:", p.name)
+	fmt.Println("Kcals:", p.kcals)
+	fmt.Println("Proteins:", p.proteins)
+	fmt.Println("Carbs:", p.carbs)
+	fmt.Println("Fats:", p.fats)
+}
