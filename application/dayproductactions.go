@@ -103,11 +103,14 @@ func showTodayTotal(db *sql.DB) ierrori {
 		d         day
 		e         error
 		products  []product
+		amounts   []float32
+		amount    float32
 		p         product
 		thisError func(e error) ierrori
 		rows      *sql.Rows
 		total     product
 		norm      dailyNorm
+		i         int
 	)
 
 	thisError = func(e error) ierrori {
@@ -119,21 +122,23 @@ func showTodayTotal(db *sql.DB) ierrori {
 		return thisError(e)
 	}
 
-	rows, e = db.Query(`select kcals, proteins, carbs, fats
-		from products where id in
-		(select productId from dayProducts
-			where dayId = $1)`, d.id)
+	rows, e = db.Query(`select p.kcals, p.proteins, p.carbs, p.fats, dp.amount
+		from products p
+		inner join dayProducts dp
+		on dp.productId = p.id
+		and (dp.dayId = $1)`, d.id)
 	if e != nil {
 		return thisError(e)
 	}
 
 	for rows.Next() {
-		e = rows.Scan(&p.kcals, &p.proteins, &p.carbs, &p.fats)
+		e = rows.Scan(&p.kcals, &p.proteins, &p.carbs, &p.fats, &amount)
 		if e != nil {
 			rows.Close()
 			return thisError(e)
 		}
 		products = append(products, p)
+		amounts = append(amounts, amount)
 	}
 	rows.Close()
 
@@ -152,11 +157,15 @@ func showTodayTotal(db *sql.DB) ierrori {
 		return thisError(e)
 	}
 
-	for _, p = range products {
-		total.kcals += p.kcals
-		total.proteins += p.proteins
-		total.carbs += p.carbs
-		total.fats += p.fats
+	if len(amounts) != len(products) {
+		return thisError(nil)
+	}
+
+	for i, p = range products {
+		total.kcals += (p.kcals / 100) * amounts[i]
+		total.proteins += (p.proteins / 100) * amounts[i]
+		total.carbs += (p.carbs / 100) * amounts[i]
+		total.fats += (p.fats / 100) * amounts[i]
 	}
 
 	fmt.Printf("Kcals: %.2f, %.2f%% \n", total.kcals, (norm.kcals*100)/total.kcals)
