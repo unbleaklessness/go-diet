@@ -13,6 +13,7 @@ func addTodayProduct(db *sql.DB) ierrori {
 		d         day
 		p         product
 		name      string
+		amount    float32
 		thisError func(e error) ierrori
 	)
 
@@ -22,6 +23,12 @@ func addTodayProduct(db *sql.DB) ierrori {
 
 	fmt.Print("Name: ")
 	_, e = fmt.Scanln(&name)
+	if e != nil {
+		return thisError(e)
+	}
+
+	fmt.Print("Amount: ")
+	_, e = fmt.Scanln(&amount)
 	if e != nil {
 		return thisError(e)
 	}
@@ -51,7 +58,7 @@ func addTodayProduct(db *sql.DB) ierrori {
 		return thisError(e)
 	}
 
-	_, e = db.Exec(`insert into dayProducts (dayId, productId) values ($1, $2)`, d.id, p.id)
+	_, e = db.Exec(`insert into dayProducts (dayId, productId, amount) values ($1, $2, $3)`, d.id, p.id, amount)
 	if e != nil {
 		return thisError(e)
 	}
@@ -96,11 +103,14 @@ func showTodayTotal(db *sql.DB) ierrori {
 		d         day
 		e         error
 		products  []product
+		amounts   []float32
+		amount    float32
 		p         product
 		thisError func(e error) ierrori
 		rows      *sql.Rows
 		total     product
 		norm      dailyNorm
+		i         int
 	)
 
 	thisError = func(e error) ierrori {
@@ -112,21 +122,23 @@ func showTodayTotal(db *sql.DB) ierrori {
 		return thisError(e)
 	}
 
-	rows, e = db.Query(`select kcals, proteins, carbs, fats
-		from products where id in
-		(select productId from dayProducts
-			where dayId = $1)`, d.id)
+	rows, e = db.Query(`select p.kcals, p.proteins, p.carbs, p.fats, dp.amount
+		from products p
+		inner join dayProducts dp
+		on dp.productId = p.id
+		and (dp.dayId = $1)`, d.id)
 	if e != nil {
 		return thisError(e)
 	}
 
 	for rows.Next() {
-		e = rows.Scan(&p.kcals, &p.proteins, &p.carbs, &p.fats)
+		e = rows.Scan(&p.kcals, &p.proteins, &p.carbs, &p.fats, &amount)
 		if e != nil {
 			rows.Close()
 			return thisError(e)
 		}
 		products = append(products, p)
+		amounts = append(amounts, amount)
 	}
 	rows.Close()
 
@@ -145,17 +157,21 @@ func showTodayTotal(db *sql.DB) ierrori {
 		return thisError(e)
 	}
 
-	for _, p = range products {
-		total.kcals += p.kcals
-		total.proteins += p.proteins
-		total.carbs += p.carbs
-		total.fats += p.fats
+	if len(amounts) != len(products) {
+		return thisError(nil)
 	}
 
-	fmt.Printf("Kcals: %.2f, %.2f%% \n", total.kcals, (norm.kcals*100)/total.kcals)
-	fmt.Printf("Proteins: %.2f, %.2f%% \n", total.proteins, (norm.proteins*100)/total.proteins)
-	fmt.Printf("Carbs: %.2f, %.2f%% \n", total.carbs, (norm.carbs*100)/total.carbs)
-	fmt.Printf("Fats: %.2f, %.2f%% \n", total.fats, (norm.fats*100)/total.fats)
+	for i, p = range products {
+		total.kcals += (p.kcals / 100) * amounts[i]
+		total.proteins += (p.proteins / 100) * amounts[i]
+		total.carbs += (p.carbs / 100) * amounts[i]
+		total.fats += (p.fats / 100) * amounts[i]
+	}
+
+	fmt.Printf("Kcals: %.1f, %.1f%% \n", total.kcals, (norm.kcals*100)/total.kcals)
+	fmt.Printf("Proteins: %.1f, %.1f%% \n", total.proteins, (norm.proteins*100)/total.proteins)
+	fmt.Printf("Carbs: %.1f, %.1f%% \n", total.carbs, (norm.carbs*100)/total.carbs)
+	fmt.Printf("Fats: %.1f, %.1f%% \n", total.fats, (norm.fats*100)/total.fats)
 
 	return nil
 }
@@ -166,6 +182,8 @@ func listTodayProducts(db *sql.DB) ierrori {
 		t            day
 		e            error
 		productNames []string
+		amounts      []float32
+		amount       float32
 		name         string
 		thisError    func(e error) ierrori
 		rows         *sql.Rows
@@ -181,25 +199,31 @@ func listTodayProducts(db *sql.DB) ierrori {
 		return thisError(e)
 	}
 
-	rows, e = db.Query(`select name
-		from products where id in
-		(select productId from dayProducts
-			where dayId = $1)`, t.id)
+	rows, e = db.Query(`select p.name, dp.amount
+		from products p
+		inner join dayProducts dp
+		on p.id = dp.productId
+		and (dp.dayId = $1)`, t.id)
 	if e != nil {
 		return thisError(e)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		e = rows.Scan(&name)
+		e = rows.Scan(&name, &amount)
 		if e != nil {
 			return thisError(e)
 		}
 		productNames = append(productNames, name)
+		amounts = append(amounts, amount)
+	}
+
+	if len(productNames) != len(amounts) {
+		return thisError(nil)
 	}
 
 	for i, name = range productNames {
-		fmt.Println(i+1, "-", name)
+		fmt.Printf("%d) %s, %.1f grams\n", i+1, name, amounts[i])
 	}
 
 	return nil
