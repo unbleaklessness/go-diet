@@ -168,10 +168,10 @@ func showTodayTotal(db *sql.DB) ierrori {
 		total.fats += (p.fats / 100) * amounts[i]
 	}
 
-	fmt.Printf("Kcals: %.1f, %.1f%% \n", total.kcals, (norm.kcals*100)/total.kcals)
-	fmt.Printf("Proteins: %.1f, %.1f%% \n", total.proteins, (norm.proteins*100)/total.proteins)
-	fmt.Printf("Carbs: %.1f, %.1f%% \n", total.carbs, (norm.carbs*100)/total.carbs)
-	fmt.Printf("Fats: %.1f, %.1f%% \n", total.fats, (norm.fats*100)/total.fats)
+	fmt.Printf("Kcals: %.1f, %.1f%% \n", total.kcals, (total.kcals*100)/norm.kcals)
+	fmt.Printf("Proteins: %.1f, %.1f%% \n", total.proteins, (total.proteins*100)/norm.proteins)
+	fmt.Printf("Carbs: %.1f, %.1f%% \n", total.carbs, (total.carbs*100)/norm.carbs)
+	fmt.Printf("Fats: %.1f, %.1f%% \n", total.fats, (total.fats*100)/norm.fats)
 
 	return nil
 }
