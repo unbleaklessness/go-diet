@@ -12,6 +12,7 @@ type flags struct {
 	remove  bool
 	total   bool
 	find    bool
+	edit    bool
 	rest    []string
 }
 
@@ -54,12 +55,17 @@ func initializeFlags() flags {
 		findLong      *bool
 		findShort     *bool
 
+		editFlagUsage string
+		editLong      *bool
+		editShort     *bool
+
 		product bool
 		add     bool
 		list    bool
 		today   bool
 		remove  bool
 		find    bool
+		edit    bool
 	)
 
 	productFlagUsage = "Action with products"
@@ -96,6 +102,10 @@ func initializeFlags() flags {
 	findLong = flag.Bool("find", false, findFlagUsage)
 	findShort = flag.Bool("f", false, findFlagUsage)
 
+	editFlagUsage = "Edit an item"
+	editLong = flag.Bool("edit", false, editFlagUsage)
+	editShort = flag.Bool("e", false, editFlagUsage)
+
 	flag.Parse()
 
 	product = *productLong || *productShort
@@ -104,6 +114,7 @@ func initializeFlags() flags {
 	today = *todayLong || *todayShort
 	remove = *removeLong || *removeShort
 	find = *findLong || *findShort
+	edit = *editLong || *editShort
 
 	var name string
 	if len(*nameLong) > 0 {
@@ -121,6 +132,7 @@ func initializeFlags() flags {
 	f.remove = remove
 	f.total = *total
 	f.find = find
+	f.edit = edit
 	f.rest = flag.Args()
 
 	return f
