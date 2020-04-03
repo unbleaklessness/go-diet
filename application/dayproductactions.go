@@ -22,7 +22,7 @@ func addTodayProduct(db *sql.DB) ierrori {
 	}
 
 	fmt.Print("Name: ")
-	_, e = fmt.Scanln(&name)
+	name, e = readLine()
 	if e != nil {
 		return thisError(e)
 	}
@@ -79,7 +79,7 @@ func removeTodayProduct(db *sql.DB) ierrori {
 	}
 
 	fmt.Print("Name: ")
-	_, e = fmt.Scanln(&name)
+	name, e = readLine()
 	if e != nil {
 		return thisError(e)
 	}

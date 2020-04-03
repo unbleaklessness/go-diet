@@ -92,7 +92,7 @@ func removeProduct(db *sql.DB) ierrori {
 	}
 
 	fmt.Print("Name: ")
-	_, e = fmt.Scanln(&name)
+	name, e = readLine()
 	if e != nil {
 		return thisError(e)
 	}
@@ -128,7 +128,7 @@ func findProduct(db *sql.DB) ierrori {
 	}
 
 	fmt.Print("Name: ")
-	_, e = fmt.Scanln(&name)
+	name, e = readLine()
 	if e != nil {
 		return thisError(e)
 	}

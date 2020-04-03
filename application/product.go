@@ -1,9 +1,7 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"os"
 )
 
 type product struct {
@@ -28,7 +26,7 @@ func scanProduct() (product, error) {
 	}
 
 	fmt.Print("Name: ")
-	p.name, e = bufio.NewReader(os.Stdin).ReadString('\n')
+	p.name, e = readLine()
 	if e != nil {
 		return thisError(e)
 	}
