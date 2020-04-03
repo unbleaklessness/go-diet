@@ -154,3 +154,64 @@ func findProduct(db *sql.DB) ierrori {
 
 	return nil
 }
+
+func editProduct(db *sql.DB) ierrori {
+
+	var (
+		name      string
+		rows      *sql.Rows
+		e         error
+		thisError func(e error) ierrori
+		oldP      product
+		newP      product
+	)
+
+	thisError = func(e error) ierrori {
+		return ierror{m: "Could not edit product", e: e}
+	}
+
+	fmt.Print("Name: ")
+	name, e = readLine()
+	if e != nil {
+		return thisError(e)
+	}
+
+	rows, e = db.Query(`select id, name, kcals, proteins, carbs, fats
+		from products
+		where name = $1
+		limit 1`, name)
+	if e != nil {
+		return thisError(e)
+	}
+
+	if !rows.Next() {
+		return thisError(nil)
+	}
+
+	e = rows.Scan(&oldP.id, &oldP.name, &oldP.kcals, &oldP.proteins, &oldP.carbs, &oldP.fats)
+	if e != nil {
+		rows.Close()
+		return thisError(e)
+	}
+	rows.Close()
+
+	fmt.Println()
+	fmt.Println("Old product:")
+	printProduct(oldP)
+
+	fmt.Println()
+	fmt.Println("New product:")
+	newP, e = scanProduct()
+	if e != nil {
+		return thisError(e)
+	}
+
+	_, e = db.Exec(`update products set
+		name = $1, kcals = $2, proteins = $3, carbs = $4, fats = $5
+		where id = $6`, newP.name, newP.kcals, newP.proteins, newP.carbs, newP.fats, oldP.id)
+	if e != nil {
+		return thisError(e)
+	}
+
+	return nil
+}
