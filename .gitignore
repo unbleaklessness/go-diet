@@ -1,4 +1,5 @@
 .vscode/
+temporary/
 
 *.sqlite
 *.txt
