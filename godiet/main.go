@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/unbleaklessness/go-diet/simplex"
 )
 
 type product struct {
@@ -20,14 +22,16 @@ type product struct {
 	Proteins float64
 	Carbs    float64
 	Fats     float64
-	Portion  float64
 	Maximum  float64
+	Minimum  float64
 }
 
 type productWithAmount struct {
 	Amount  float64
 	Product product
 }
+
+type diet = [][]productWithAmount
 
 const (
 	jsonExtension = ".json"
@@ -37,16 +41,12 @@ const (
 	normCarbs    = 1600.0
 	normFats     = 900.0
 
-	overshootPercentage = 15.0
+	overshootPercentage = 5.0
 	overshootKcals      = normKcals + (normKcals/100.0)*overshootPercentage
 	overshootProteins   = normProteins + (normProteins/100.0)*overshootPercentage
 	overshootCarbs      = normCarbs + (normCarbs/100.0)*overshootPercentage
 	overshootFats       = normFats + (normFats/100.0)*overshootPercentage
 )
-
-func overshootAmount(amount float64) float64 {
-	return amount + (amount/100.0)*overshootPercentage
-}
 
 func cutExtension(path string) string {
 	return strings.TrimSuffix(path, filepath.Ext(path))
@@ -88,7 +88,7 @@ func readProduct(path string) (product, error) {
 
 func findProducts() []product {
 
-	products := make([]product, 0)
+	products := []product{}
 
 	filepath.Walk(".", func(path string, info os.FileInfo, e error) error {
 
@@ -109,18 +109,131 @@ func findProducts() []product {
 	return products
 }
 
-func randomProduct(products []product) (product, int) {
-	if len(products) < 1 {
-		return product{}, -1
+func dayDiet(products []product) ([]productWithAmount, bool) {
+
+	nOptimizationColumns := len(products)
+
+	nLTConstraints := 4 + len(products)
+	ltConstraintsLHS := make([][]float64, nLTConstraints)
+	ltConstraintsRHS := make([]float64, nLTConstraints)
+	for i := 0; i < nLTConstraints; i++ {
+		ltConstraintsLHS[i] = make([]float64, nOptimizationColumns)
 	}
 
-	index := rand.Intn(len(products))
-	return products[index], index
+	for i := 0; i < len(products); i++ {
+		ltConstraintsLHS[0][i] = products[i].Kcals
+		ltConstraintsLHS[1][i] = products[i].Proteins * 4.0
+		ltConstraintsLHS[2][i] = products[i].Carbs * 4.0
+		ltConstraintsLHS[3][i] = products[i].Fats * 9.0
+	}
+	ltConstraintsRHS[0] = overshootKcals
+	ltConstraintsRHS[1] = overshootProteins
+	ltConstraintsRHS[2] = overshootCarbs
+	ltConstraintsRHS[3] = overshootFats
+
+	for i := 0; i < len(products); i++ {
+		j := i + 4
+		ltConstraintsLHS[j][i] = 100.0
+		ltConstraintsRHS[j] = products[i].Maximum
+	}
+
+	nGTConstraints := 4 + len(products)
+	gtConstraintsLHS := make([][]float64, nGTConstraints)
+	gtConstraintsRHS := make([]float64, nGTConstraints)
+	for i := 0; i < nGTConstraints; i++ {
+		gtConstraintsLHS[i] = make([]float64, nOptimizationColumns)
+	}
+
+	for i := 0; i < len(products); i++ {
+		gtConstraintsLHS[0][i] = products[i].Kcals
+		gtConstraintsLHS[1][i] = products[i].Proteins * 4.0
+		gtConstraintsLHS[2][i] = products[i].Carbs * 4.0
+		gtConstraintsLHS[3][i] = products[i].Fats * 9.0
+	}
+	gtConstraintsRHS[0] = normKcals
+	gtConstraintsRHS[1] = normProteins
+	gtConstraintsRHS[2] = normCarbs
+	gtConstraintsRHS[3] = normFats
+
+	for i := 0; i < len(products); i++ {
+		j := i + 4
+		gtConstraintsLHS[j][i] = 100.0
+		gtConstraintsRHS[j] = products[i].Minimum
+	}
+
+	objective := make([]float64, nOptimizationColumns)
+	for i := range products {
+		proteins := products[i].Proteins * 4.0
+		carbs := products[i].Carbs * 4.0
+		fats := products[i].Fats * 9.0
+		objective[i] = products[i].Kcals + proteins + carbs + fats
+	}
+
+	amounts, _, ok := simplex.Simplex(
+		objective,
+		gtConstraintsLHS, gtConstraintsRHS,
+		ltConstraintsLHS, ltConstraintsRHS,
+		[][]float64{}, []float64{})
+	if !ok {
+		return []productWithAmount{}, false
+	}
+
+	diet := make([]productWithAmount, len(products))
+
+	for i, amount := range amounts {
+		p := productWithAmount{
+			Product: products[i],
+			Amount:  amount,
+		}
+		diet[i] = p
+	}
+
+	return diet, true
 }
 
-func (p *product) randomAmount() float64 {
-	maximumPortions := int(math.Ceil(p.Maximum / p.Portion))
-	return float64(rand.Intn(maximumPortions)) * p.Portion
+func dayDietIsValid(products []productWithAmount) bool {
+
+	totalKcals := 0.0
+	totalProteins := 0.0
+	totalCarbs := 0.0
+	totalFats := 0.0
+
+	for _, p := range products {
+		if p.Amount <= 0.0 {
+			continue
+		}
+		totalKcals += p.Product.Kcals * p.Amount
+		totalProteins += p.Product.Proteins * p.Amount * 4.0
+		totalCarbs += p.Product.Carbs * p.Amount * 4.0
+		totalFats += p.Product.Fats * p.Amount * 9.0
+	}
+
+	return totalKcals <= overshootKcals && totalKcals >= normKcals &&
+		totalProteins <= overshootProteins && totalProteins >= normProteins &&
+		totalCarbs <= overshootCarbs && totalCarbs >= normCarbs &&
+		totalFats <= overshootFats && totalFats >= normFats
+}
+
+func pickRandomProducts(products []product, n int) []product {
+
+	pickedProducts := make([]product, n)
+	pickedIndexes := make([]int, n)
+	index := 0
+
+outer:
+	for index < n {
+		pickIndex := rand.Intn(len(products))
+		for _, i := range pickedIndexes[:index] {
+			if i == pickIndex {
+				continue outer
+			}
+		}
+		pickedIndexes[index] = pickIndex
+		pickedProducts[index] = products[pickIndex]
+		index++
+	}
+
+	return pickedProducts
 }
 
 func main() {
@@ -128,27 +241,22 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	defaultFloat := float64(math.MaxFloat64)
-	// defaultInteger := int64(math.MaxInt64)
 
 	newProduct := flag.String("new-product", "", "Create new product")
 	kcals := flag.Float64("kcals", defaultFloat, "Kcals for product")
 	proteins := flag.Float64("proteins", defaultFloat, "Proteins for product")
 	carbs := flag.Float64("carbs", defaultFloat, "Carbs for product")
 	fats := flag.Float64("fats", defaultFloat, "Fats for product")
-	portion := flag.Float64("portion", defaultFloat, "Product portion")
 	productMaximum := flag.Float64("maximum", defaultFloat, "Product maximum")
 	optimize := flag.String("optimize", "", "Create an optimized diet")
-	// dayProducts := flag.Int64("-day-products", defaultInteger, "Use with `-optimize` to set maximum number of products per day")
 
 	flag.Parse()
 
 	products := findProducts()
 
-	fmt.Println(products)
-
 	if len(*newProduct) > 0 && *kcals != defaultFloat &&
 		*proteins != defaultFloat && *carbs != defaultFloat && *fats != defaultFloat &&
-		*portion != defaultFloat && *productMaximum != defaultFloat {
+		*productMaximum != defaultFloat {
 
 		path := setJSONExtension(filepath.Clean(*newProduct))
 		name := cutExtension(filepath.Base(*newProduct))
@@ -159,7 +267,6 @@ func main() {
 			Proteins: *proteins,
 			Carbs:    *carbs,
 			Fats:     *fats,
-			Portion:  *portion,
 			Maximum:  *productMaximum,
 		}
 
@@ -181,74 +288,41 @@ func main() {
 
 		*optimize = filepath.Clean(*optimize)
 
-		amounts := make([]float64, len(products))
+		nWeekDays := 7
+		nWeekProducts := 15
+		nDayProducts := 6
 
-		kcalsCounter := 0.0
-		proteinsCounter := 0.0
-		carbsCounter := 0.0
-		fatsCounter := 0.0
+		weekDiet := make([][]productWithAmount, nWeekDays)
+		weekProducts := pickRandomProducts(products, nWeekProducts)
 
+	outer:
 		for {
-			p, i := randomProduct(products)
-			if i == -1 {
-				fmt.Println("No products are found")
-				return
+			weekDiet = make([][]productWithAmount, nWeekDays)
+			weekProducts = pickRandomProducts(products, nWeekProducts)
+
+			currentDay := 0
+			iterations := 0
+			for currentDay < nWeekDays {
+				if iterations > 10000 {
+					continue outer
+				}
+				iterations++
+
+				dayProducts := pickRandomProducts(weekProducts, nDayProducts)
+
+				dayDiet, ok := dayDiet(dayProducts)
+				if !ok || !dayDietIsValid(dayDiet) {
+					continue
+				}
+
+				weekDiet[currentDay] = dayDiet
+				currentDay++
 			}
 
-			amount := p.randomAmount()
-
-			kcalsCounter += p.Kcals * amount / 100.0
-			proteinsCounter += p.Proteins * amount / 100.0
-			carbsCounter += p.Carbs * amount / 100.0
-			fatsCounter += p.Fats * amount / 100.0
-
-			amounts[i] += amount
-
-			if amounts[i] > overshootAmount(p.Maximum) ||
-				kcalsCounter > overshootKcals || proteinsCounter > overshootProteins ||
-				carbsCounter > overshootCarbs || fatsCounter > overshootFats {
-
-				amounts = make([]float64, len(products))
-
-				kcalsCounter = 0
-				proteinsCounter = 0
-				carbsCounter = 0
-				fatsCounter = 0
-
-				continue
-			}
-
-			if kcalsCounter > normKcals && proteinsCounter > normProteins &&
-				carbsCounter > normCarbs && fatsCounter > normFats {
-
-				break
-			}
+			break
 		}
 
-		fmt.Println("Kcals:", kcalsCounter)
-		fmt.Println("Proteins:", proteinsCounter)
-		fmt.Println("Carbs:", carbsCounter)
-		fmt.Println("Fats:", fatsCounter)
-		fmt.Println()
-
-		optimizedProducts := make([]productWithAmount, 0)
-
-		for i, amount := range amounts {
-
-			if amount <= 0.5 {
-				continue
-			}
-
-			p := productWithAmount{
-				Amount:  amount,
-				Product: products[i],
-			}
-			optimizedProducts = append(optimizedProducts, p)
-
-			fmt.Printf("%s -> %.2f\n", products[i].Name, amount)
-		}
-
-		data, e := json.MarshalIndent(optimizedProducts, "", "    ")
+		data, e := json.MarshalIndent(weekDiet, "", "    ")
 		if e != nil {
 			fmt.Println("Could not save optimized diet")
 			return
