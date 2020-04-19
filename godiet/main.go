@@ -17,7 +17,7 @@ import (
 )
 
 type product struct {
-	Name        string
+	ID          uint64
 	Kcals       float64
 	Proteins    float64
 	Carbs       float64
@@ -25,15 +25,19 @@ type product struct {
 	Maximum     float64
 	Minimum     float64
 	Description string
+
+	name string
 }
 
-type productWithAmount struct {
+type dietEntry struct {
+	ID       uint64
 	Amount   float64
 	Consumed float64
-	Product  product
+
+	product product
 }
 
-type diet = [][]productWithAmount
+type diet = [][]dietEntry
 
 const (
 	jsonExtension = ".json"
@@ -49,6 +53,10 @@ const (
 	overshootCarbs      = normCarbs + (normCarbs/100.0)*overshootPercentage
 	overshootFats       = normFats + (normFats/100.0)*overshootPercentage
 )
+
+func id() uint64 {
+	return rand.Uint64()
+}
 
 func cutExtension(path string) string {
 	return strings.TrimSuffix(path, filepath.Ext(path))
@@ -85,7 +93,13 @@ func readProduct(path string) (product, error) {
 		return product{}, e
 	}
 
+	p.name = cutExtension(filepath.Base(path))
+
 	return p, e
+}
+
+func isProduct(info os.FileInfo) bool {
+	return !info.IsDir() && filepath.Ext(info.Name()) == jsonExtension
 }
 
 func unmarshalDiet(dietBytes []byte) (diet, error) {
@@ -118,13 +132,18 @@ func readDiet(path string) (diet, error) {
 	return d, e
 }
 
+func isDiet(path string) bool {
+	info, e := os.Stat(path)
+	return e == nil && !info.IsDir() && filepath.Ext(path) == jsonExtension
+}
+
 func findProducts() []product {
 
 	products := []product{}
 
 	filepath.Walk(".", func(path string, info os.FileInfo, e error) error {
 
-		if info.IsDir() {
+		if !isProduct(info) {
 			return nil
 		}
 
@@ -141,7 +160,7 @@ func findProducts() []product {
 	return products
 }
 
-func dayDiet(products []product) ([]productWithAmount, bool) {
+func dayDiet(products []product) ([]dietEntry, bool) {
 
 	nOptimizationColumns := len(products)
 
@@ -207,43 +226,43 @@ func dayDiet(products []product) ([]productWithAmount, bool) {
 		ltConstraintsLHS, ltConstraintsRHS,
 		[][]float64{}, []float64{})
 	if !ok {
-		return []productWithAmount{}, false
+		return []dietEntry{}, false
 	}
-
-	diet := make([]productWithAmount, len(products))
-
-	for i, amount := range amounts {
-		p := productWithAmount{
-			Product: products[i],
-			Amount:  amount,
-		}
-		diet[i] = p
-	}
-
-	return diet, true
-}
-
-func dayDietIsValid(products []productWithAmount) bool {
 
 	totalKcals := 0.0
 	totalProteins := 0.0
 	totalCarbs := 0.0
 	totalFats := 0.0
 
-	for _, p := range products {
-		if p.Amount <= 0.0 {
+	for i, p := range products {
+		if amounts[i] <= 0.0 {
 			continue
 		}
-		totalKcals += p.Product.Kcals * p.Amount
-		totalProteins += p.Product.Proteins * p.Amount * 4.0
-		totalCarbs += p.Product.Carbs * p.Amount * 4.0
-		totalFats += p.Product.Fats * p.Amount * 9.0
+		totalKcals += p.Kcals * amounts[i]
+		totalProteins += p.Proteins * amounts[i] * 4.0
+		totalCarbs += p.Carbs * amounts[i] * 4.0
+		totalFats += p.Fats * amounts[i] * 9.0
 	}
 
-	return totalKcals <= overshootKcals && totalKcals >= normKcals &&
+	ok = totalKcals <= overshootKcals && totalKcals >= normKcals &&
 		totalProteins <= overshootProteins && totalProteins >= normProteins &&
 		totalCarbs <= overshootCarbs && totalCarbs >= normCarbs &&
 		totalFats <= overshootFats && totalFats >= normFats
+	if !ok {
+		return []dietEntry{}, false
+	}
+
+	dayDiet := make([]dietEntry, len(products))
+
+	for i, amount := range amounts {
+		p := dietEntry{
+			ID:     products[i].ID,
+			Amount: amount,
+		}
+		dayDiet[i] = p
+	}
+
+	return dayDiet, true
 }
 
 func pickRandomProducts(products []product, n int) []product {
@@ -260,8 +279,8 @@ outer:
 				continue outer
 			}
 		}
-		pickedIndexes[index] = pickIndex
 		pickedProducts[index] = products[pickIndex]
+		pickedIndexes[index] = pickIndex
 		index++
 	}
 
@@ -293,6 +312,54 @@ func writeJSON(structure interface{}, path string) error {
 	return nil
 }
 
+func productWithID(products []product, id uint64) (product, bool) {
+
+	for _, p := range products {
+		if p.ID == id {
+			return p, true
+		}
+	}
+
+	return product{}, false
+}
+
+func setDietProducts(d diet, products []product) (diet, bool) {
+
+	for _, day := range d {
+		for i, entry := range day {
+			p, ok := productWithID(products, entry.ID)
+			if !ok {
+				return diet{}, false
+			}
+			day[i].product = p
+		}
+	}
+
+	return d, true
+}
+
+func getDiet(path string, products []product) (diet, bool) {
+
+	if !isDiet(path) {
+		fmt.Println("Provided file is not a diet")
+		return diet{}, false
+	}
+
+	d, e := readDiet(path)
+	if e != nil {
+		fmt.Println("Could not read diet")
+		return diet{}, false
+	}
+
+	d, ok := setDietProducts(d, products)
+	if !ok {
+		fmt.Println("Could not find diet product")
+		return diet{}, false
+	}
+
+	return d, true
+}
+
 func main() {
 
 	rand.Seed(time.Now().UnixNano())
@@ -318,21 +385,14 @@ func main() {
 	if len(*newProductFlag) > 0 {
 
 		path := setJSONExtension(filepath.Clean(*newProductFlag))
-		name := cutExtension(filepath.Base(path))
 
 		p := product{
-			Name: name,
+			ID: id(),
 		}
 
-		data, e := json.MarshalIndent(p, "", "    ")
+		e := writeJSON(p, path)
 		if e != nil {
 			fmt.Println("Could not create new product")
-			return
-		}
-
-		e = ioutil.WriteFile(path, data, os.ModePerm)
-		if e != nil {
-			fmt.Println("Could not write new product")
 			return
 		}
 
@@ -340,38 +400,43 @@ func main() {
 
 	} else if len(*newDietFlag) > 0 {
 
-		nWeekDays := 7
-
-		nDayProducts := 6
-		if *productsPerDayFlag != defaultInteger {
-			nDayProducts = int(*productsPerDayFlag)
+		if len(products) < 1 {
+			fmt.Println("No products found")
+			return
 		}
 
-		nWeekProducts := 15
+		nWeekDays := 7
+
+		productsPerDay := 6
+		if *productsPerDayFlag != defaultInteger {
+			productsPerDay = int(*productsPerDayFlag)
+		}
+
+		productsPerWeek := 15
 		if *productsPerWeekFlag != defaultInteger {
-			nWeekProducts = int(*productsPerWeekFlag)
+			productsPerWeek = int(*productsPerWeekFlag)
 		}
 
 		newDiet := make(diet, nWeekDays)
-		weekProducts := pickRandomProducts(products, nWeekProducts)
+		weekProducts := pickRandomProducts(products, productsPerWeek)
 
-	dietLoop:
+	newDietLoop:
 		for {
 			newDiet = make(diet, nWeekDays)
-			weekProducts = pickRandomProducts(products, nWeekProducts)
+			weekProducts = pickRandomProducts(products, productsPerWeek)
 
 			currentDay := 0
 			iterations := 0
 			for currentDay < nWeekDays {
 				if iterations > 10000 {
-					continue dietLoop
+					continue newDietLoop
 				}
 				iterations++
 
-				dayProducts := pickRandomProducts(weekProducts, nDayProducts)
+				dayProducts := pickRandomProducts(weekProducts, productsPerDay)
 
 				dayDiet, ok := dayDiet(dayProducts)
-				if !ok || !dayDietIsValid(dayDiet) {
+				if !ok {
 					continue
 				}
 
@@ -396,31 +461,30 @@ func main() {
 
 		*dietFlag = filepath.Clean(*dietFlag)
 
-		diet, e := readDiet(*dietFlag)
-		if e != nil {
-			fmt.Println("Could not read diet")
+		diet, ok := getDiet(*dietFlag, products)
+		if !ok {
 			return
 		}
 
-		dietProducts := []productWithAmount{}
+		commonEntries := []dietEntry{}
 
 		for _, day := range diet {
-		dayProductLoop:
-			for _, dayProduct := range day {
-				for i, dietProduct := range dietProducts {
-					if dietProduct.Product.Name == dayProduct.Product.Name {
-						dietProducts[i].Amount += dayProduct.Amount
-						continue dayProductLoop
+		dietProductsLoop:
+			for _, entry := range day {
+				for i, common := range commonEntries {
+					if common.product.name == entry.product.name {
+						commonEntries[i].Amount += entry.Amount
+						continue dietProductsLoop
 					}
 				}
-				dietProducts = append(dietProducts, dayProduct)
+				commonEntries = append(commonEntries, entry)
 			}
 		}
 
-		for i, p := range dietProducts {
-			pAmount := p.Amount * 100.0
+		for i, p := range commonEntries {
+			amount := p.Amount * 100.0
 			index := i + 1
-			fmt.Printf("%d) %s - %.0f\n", index, p.Product.Name, pAmount)
+			fmt.Printf("%d) %s - %.0f\n", index, p.product.name, amount)
 		}
 
 		return
@@ -429,28 +493,19 @@ func main() {
 
 		*dietFlag = filepath.Clean(*dietFlag)
 
-		diet, e := readDiet(*dietFlag)
-		if e != nil {
-			fmt.Println("Could not read diet")
+		diet, ok := getDiet(*dietFlag, products)
+		if !ok {
 			return
 		}
 
 		today := weekDay()
 
-		maximum := 0
-		for _, p := range diet[today] {
-			length := len(p.Product.Name)
-			if length > maximum {
-				maximum = length
-			}
-		}
-
-		for i, p := range diet[today] {
+		for i, entry := range diet[today] {
 			index := i + 1
-			amount := p.Amount * 100.0
-			remaining := (p.Amount - p.Consumed) * 100.0
+			amount := entry.Amount * 100.0
+			remaining := (entry.Amount - entry.Consumed) * 100.0
 			percentange := (amount - remaining) / amount * 100.0
-			fmt.Printf("%d) %s - %.0f%%, %.0f out of %.0f\n", index, p.Product.Name, percentange, remaining, amount)
+			fmt.Printf("%d) %s - %.0f%%, %.0f out of %.0f\n", index, entry.product.name, percentange, remaining, amount)
 		}
 
 		return
@@ -459,42 +514,37 @@ func main() {
 
 		*dietFlag = filepath.Clean(*dietFlag)
 
-		diet, e := readDiet(*dietFlag)
-		if e != nil {
-			fmt.Println("Could not read diet")
+		diet, ok := getDiet(*dietFlag, products)
+		if !ok {
 			return
 		}
 
 		today := weekDay()
 
-		ok := false
-		for i, p := range diet[today] {
-			if p.Product.Name == *productFlag {
+		for i, entry := range diet[today] {
+			if entry.product.name == *productFlag {
+
 				diet[today][i].Consumed += *consumedFlag / 100.0
-				ok = true
-				break
+
+				e := writeJSON(diet, *dietFlag)
+				if e != nil {
+					fmt.Println("Could not save diet with changes")
+					return
+				}
+
+				return
 			}
 		}
-		if !ok {
-			fmt.Println("Could not find product with provided name")
-			return
-		}
 
-		e = writeJSON(diet, *dietFlag)
-		if e != nil {
-			fmt.Println("Could not save diet with changes")
-			return
-		}
-
+		fmt.Println("Could not find product with provided name")
 		return
 
 	} else if len(*dietFlag) > 0 && *resetConsumedFlag {
 
 		*dietFlag = filepath.Clean(*dietFlag)
 
-		diet, e := readDiet(*dietFlag)
-		if e != nil {
-			fmt.Println("Could not read diet")
+		diet, ok := getDiet(*dietFlag, products)
+		if !ok {
 			return
 		}
 
@@ -504,7 +554,7 @@ func main() {
 			}
 		}
 
-		e = writeJSON(diet, *dietFlag)
+		e := writeJSON(diet, *dietFlag)
 		if e != nil {
 			fmt.Println("Could not save diet with changes")
 			return
@@ -516,19 +566,18 @@ func main() {
 
 		*dietFlag = filepath.Clean(*dietFlag)
 
-		diet, e := readDiet(*dietFlag)
-		if e != nil {
-			fmt.Println("Could not read diet")
+		diet, ok := getDiet(*dietFlag, products)
+		if !ok {
 			return
 		}
 
 		for i, day := range diet {
 			index := i + 1
 			fmt.Printf("Day %d:\n", index)
-			for j, p := range day {
+			for j, entry := range day {
 				index := j + 1
-				amount := p.Amount * 100.0
-				fmt.Printf("%d) %s - %.0f\n", index, p.Product.Name, amount)
+				amount := entry.Amount * 100.0
+				fmt.Printf("%d) %s - %.0f\n", index, entry.product.name, amount)
 			}
 			if i < len(day) {
 				fmt.Println()
