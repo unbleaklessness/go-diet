@@ -17,18 +17,20 @@ import (
 )
 
 type product struct {
-	Name     string
-	Kcals    float64
-	Proteins float64
-	Carbs    float64
-	Fats     float64
-	Maximum  float64
-	Minimum  float64
+	Name        string
+	Kcals       float64
+	Proteins    float64
+	Carbs       float64
+	Fats        float64
+	Maximum     float64
+	Minimum     float64
+	Description string
 }
 
 type productWithAmount struct {
-	Amount  float64
-	Product product
+	Amount   float64
+	Consumed float64
+	Product  product
 }
 
 type diet = [][]productWithAmount
@@ -84,6 +86,36 @@ func readProduct(path string) (product, error) {
 	}
 
 	return p, e
+}
+
+func unmarshalDiet(dietBytes []byte) (diet, error) {
+
+	decoder := json.NewDecoder(bytes.NewReader(dietBytes))
+	decoder.DisallowUnknownFields()
+
+	d := diet{}
+
+	e := decoder.Decode(&d)
+	if e != nil {
+		return diet{}, e
+	}
+
+	return d, nil
+}
+
+func readDiet(path string) (diet, error) {
+
+	data, e := ioutil.ReadFile(path)
+	if e != nil {
+		return diet{}, e
+	}
+
+	d, e := unmarshalDiet(data)
+	if e != nil {
+		return diet{}, e
+	}
+
+	return d, e
 }
 
 func findProducts() []product {
@@ -236,38 +268,60 @@ outer:
 	return pickedProducts
 }
 
+func weekDay() int {
+	day := int(time.Now().Weekday())
+	if day == 0 {
+		day = 6
+	} else {
+		day--
+	}
+	return day
+}
+
+func writeJSON(structure interface{}, path string) error {
+
+	data, e := json.MarshalIndent(structure, "", "    ")
+	if e != nil {
+		return e
+	}
+
+	e = ioutil.WriteFile(path, data, os.ModePerm)
+	if e != nil {
+		return e
+	}
+
+	return nil
+}
+
 func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
 	defaultFloat := float64(math.MaxFloat64)
+	defaultInteger := int64(math.MaxInt64)
 
-	newProduct := flag.String("new-product", "", "Create new product")
-	kcals := flag.Float64("kcals", defaultFloat, "Kcals for product")
-	proteins := flag.Float64("proteins", defaultFloat, "Proteins for product")
-	carbs := flag.Float64("carbs", defaultFloat, "Carbs for product")
-	fats := flag.Float64("fats", defaultFloat, "Fats for product")
-	productMaximum := flag.Float64("maximum", defaultFloat, "Product maximum")
-	optimize := flag.String("optimize", "", "Create an optimized diet")
+	newProductFlag := flag.String("new-product", "", "Create new product")
+	newDietFlag := flag.String("new-diet", "", "Create optimized diet")
+	productsPerDayFlag := flag.Int64("products-per-day", defaultInteger, "Use with `-optimize` to set the number of products per day")
+	productsPerWeekFlag := flag.Int64("products-per-week", defaultInteger, "Use with `-optimize` to set the number of products per week")
+	dietFlag := flag.String("diet", "", "Diet actions. Show diet if alone")
+	productsFlag := flag.Bool("products", false, "Use with `-diet` flag to see products and amounts for the whole week")
+	remainingFlag := flag.Bool("remaining", false, "Use with `-diet` flag to see remaining products and amounts for today")
+	productFlag := flag.String("product", "", "Use with `-diet` and `-consumed` flags to add a product and consumed amount for today")
+	consumedFlag := flag.Float64("consumed", defaultFloat, "Use with `-diet` and `-product` flags to add a product and consumed amount for today")
+	resetConsumedFlag := flag.Bool("reset-consumed", false, "Use with `-diet` flag to reset all consumed amounts")
 
 	flag.Parse()
 
 	products := findProducts()
 
-	if len(*newProduct) > 0 && *kcals != defaultFloat &&
-		*proteins != defaultFloat && *carbs != defaultFloat && *fats != defaultFloat &&
-		*productMaximum != defaultFloat {
+	if len(*newProductFlag) > 0 {
 
-		path := setJSONExtension(filepath.Clean(*newProduct))
-		name := cutExtension(filepath.Base(*newProduct))
+		path := setJSONExtension(filepath.Clean(*newProductFlag))
+		name := cutExtension(filepath.Base(path))
 
 		p := product{
-			Name:     name,
-			Kcals:    *kcals,
-			Proteins: *proteins,
-			Carbs:    *carbs,
-			Fats:     *fats,
-			Maximum:  *productMaximum,
+			Name: name,
 		}
 
 		data, e := json.MarshalIndent(p, "", "    ")
@@ -284,27 +338,35 @@ func main() {
 
 		return
 
-	} else if len(*optimize) > 0 {
+	} else if len(*newDietFlag) > 0 {
 
-		*optimize = filepath.Clean(*optimize)
+		*newDietFlag = filepath.Clean(*newDietFlag)
 
 		nWeekDays := 7
-		nWeekProducts := 15
-		nDayProducts := 6
 
-		weekDiet := make([][]productWithAmount, nWeekDays)
+		nDayProducts := 6
+		if *productsPerDayFlag != defaultInteger {
+			nDayProducts = int(*productsPerDayFlag)
+		}
+
+		nWeekProducts := 15
+		if *productsPerWeekFlag != defaultInteger {
+			nWeekProducts = int(*productsPerWeekFlag)
+		}
+
+		newDiet := make(diet, nWeekDays)
 		weekProducts := pickRandomProducts(products, nWeekProducts)
 
-	outer:
+	dietLoop:
 		for {
-			weekDiet = make([][]productWithAmount, nWeekDays)
+			newDiet = make(diet, nWeekDays)
 			weekProducts = pickRandomProducts(products, nWeekProducts)
 
 			currentDay := 0
 			iterations := 0
 			for currentDay < nWeekDays {
 				if iterations > 10000 {
-					continue outer
+					continue dietLoop
 				}
 				iterations++
 
@@ -315,23 +377,162 @@ func main() {
 					continue
 				}
 
-				weekDiet[currentDay] = dayDiet
+				newDiet[currentDay] = dayDiet
 				currentDay++
 			}
 
 			break
 		}
 
-		data, e := json.MarshalIndent(weekDiet, "", "    ")
+		e := writeJSON(newDiet, *newDietFlag)
 		if e != nil {
-			fmt.Println("Could not save optimized diet")
+			fmt.Println("Could not save diet")
 			return
 		}
 
-		e = ioutil.WriteFile(*optimize, data, os.ModePerm)
+		return
+
+	} else if len(*dietFlag) > 0 && *productsFlag {
+
+		*dietFlag = filepath.Clean(*dietFlag)
+
+		diet, e := readDiet(*dietFlag)
 		if e != nil {
-			fmt.Println("Could not save optimized diet")
+			fmt.Println("Could not read diet")
 			return
+		}
+
+		dietProducts := []productWithAmount{}
+
+		for _, day := range diet {
+		dayProductLoop:
+			for _, dayProduct := range day {
+				for i, dietProduct := range dietProducts {
+					if dietProduct.Product.Name == dayProduct.Product.Name {
+						dietProducts[i].Amount += dayProduct.Amount
+						continue dayProductLoop
+					}
+				}
+				dietProducts = append(dietProducts, dayProduct)
+			}
+		}
+
+		for i, p := range dietProducts {
+			pAmount := p.Amount * 100.0
+			index := i + 1
+			fmt.Printf("%d) %s - %.0f\n", index, p.Product.Name, pAmount)
+		}
+
+		return
+
+	} else if len(*dietFlag) > 0 && *remainingFlag {
+
+		*dietFlag = filepath.Clean(*dietFlag)
+
+		diet, e := readDiet(*dietFlag)
+		if e != nil {
+			fmt.Println("Could not read diet")
+			return
+		}
+
+		today := weekDay()
+
+		maximum := 0
+		for _, p := range diet[today] {
+			length := len(p.Product.Name)
+			if length > maximum {
+				maximum = length
+			}
+		}
+
+		for i, p := range diet[today] {
+			index := i + 1
+			amount := p.Amount * 100.0
+			remaining := (p.Amount - p.Consumed) * 100.0
+			percentange := (amount - remaining) / amount * 100.0
+			fmt.Printf("%d) %s - %.0f%%, %.0f out of %.0f\n", index, p.Product.Name, percentange, remaining, amount)
+		}
+
+		return
+
+	} else if len(*dietFlag) > 0 && len(*productFlag) > 0 && *consumedFlag != defaultFloat {
+
+		*dietFlag = filepath.Clean(*dietFlag)
+
+		diet, e := readDiet(*dietFlag)
+		if e != nil {
+			fmt.Println("Could not read diet")
+			return
+		}
+
+		today := weekDay()
+
+		ok := false
+		for i, p := range diet[today] {
+			if p.Product.Name == *productFlag {
+				diet[today][i].Consumed += *consumedFlag / 100.0
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			fmt.Println("Could not find product with provided name")
+			return
+		}
+
+		e = writeJSON(diet, *dietFlag)
+		if e != nil {
+			fmt.Println("Could not save diet with changes")
+			return
+		}
+
+		return
+
+	} else if len(*dietFlag) > 0 && *resetConsumedFlag {
+
+		*dietFlag = filepath.Clean(*dietFlag)
+
+		diet, e := readDiet(*dietFlag)
+		if e != nil {
+			fmt.Println("Could not read diet")
+			return
+		}
+
+		for i := range diet {
+			for j := range diet[i] {
+				diet[i][j].Consumed = 0.0
+			}
+		}
+
+		e = writeJSON(diet, *dietFlag)
+		if e != nil {
+			fmt.Println("Could not save diet with changes")
+			return
+		}
+
+		return
+
+	} else if len(*dietFlag) > 0 {
+
+		*dietFlag = filepath.Clean(*dietFlag)
+
+		diet, e := readDiet(*dietFlag)
+		if e != nil {
+			fmt.Println("Could not read diet")
+			return
+		}
+
+		for i, day := range diet {
+			index := i + 1
+			fmt.Printf("Day %d:\n", index)
+			for j, p := range day {
+				index := j + 1
+				amount := p.Amount * 100.0
+				fmt.Printf("%d) %s - %.0f\n", index, p.Product.Name, amount)
+			}
+			if i < len(day) {
+				fmt.Println()
+			}
 		}
 
 		return
