@@ -340,8 +340,6 @@ func main() {
 
 	} else if len(*newDietFlag) > 0 {
 
-		*newDietFlag = filepath.Clean(*newDietFlag)
-
 		nWeekDays := 7
 
 		nDayProducts := 6
@@ -384,7 +382,9 @@ func main() {
 			break
 		}
 
-		e := writeJSON(newDiet, *newDietFlag)
+		path := setJSONExtension(filepath.Clean(*newDietFlag))
+
+		e := writeJSON(newDiet, path)
 		if e != nil {
 			fmt.Println("Could not save diet")
 			return
