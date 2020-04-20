@@ -42,16 +42,16 @@ type diet = [][]dietEntry
 const (
 	jsonExtension = ".json"
 
-	normKcals    = 3000.0
-	normProteins = 500.0
-	normCarbs    = 1600.0
-	normFats     = 900.0
+	normKcals    = 2500.0
+	normProteins = normKcals * 0.15
+	normCarbs    = normKcals * 0.55
+	normFats     = normKcals * 0.3
 
-	overshootPercentage = 5.0
-	overshootKcals      = normKcals + (normKcals/100.0)*overshootPercentage
-	overshootProteins   = normProteins + (normProteins/100.0)*overshootPercentage
-	overshootCarbs      = normCarbs + (normCarbs/100.0)*overshootPercentage
-	overshootFats       = normFats + (normFats/100.0)*overshootPercentage
+	overshootPercentage = 0.05
+	overshootKcals      = normKcals + normKcals*overshootPercentage
+	overshootProteins   = normProteins + normProteins*overshootPercentage
+	overshootCarbs      = normCarbs + normCarbs*overshootPercentage
+	overshootFats       = normFats + normFats*overshootPercentage
 )
 
 func id() uint64 {
@@ -160,6 +160,32 @@ func findProducts() []product {
 	return products
 }
 
+func totalMacronutrients(entries []dietEntry, isConsumed bool) (float64, float64, float64, float64) {
+
+	totalKcals := 0.0
+	totalProteins := 0.0
+	totalCarbs := 0.0
+	totalFats := 0.0
+
+	if isConsumed {
+		for _, entry := range entries {
+			totalKcals += entry.product.Kcals * entry.Consumed
+			totalProteins += entry.product.Proteins * entry.Consumed * 4.0
+			totalCarbs += entry.product.Carbs * entry.Consumed * 4.0
+			totalFats += entry.product.Fats * entry.Consumed * 9.0
+		}
+	} else {
+		for _, entry := range entries {
+			totalKcals += entry.product.Kcals * entry.Amount
+			totalProteins += entry.product.Proteins * entry.Amount * 4.0
+			totalCarbs += entry.product.Carbs * entry.Amount * 4.0
+			totalFats += entry.product.Fats * entry.Amount * 9.0
+		}
+	}
+
+	return totalKcals, totalProteins, totalCarbs, totalFats
+}
+
 func dayDiet(products []product) ([]dietEntry, bool) {
 
 	nOptimizationColumns := len(products)
@@ -229,29 +255,6 @@ func dayDiet(products []product) ([]dietEntry, bool) {
 		return []dietEntry{}, false
 	}
 
-	totalKcals := 0.0
-	totalProteins := 0.0
-	totalCarbs := 0.0
-	totalFats := 0.0
-
-	for i, p := range products {
-		if amounts[i] <= 0.0 {
-			continue
-		}
-		totalKcals += p.Kcals * amounts[i]
-		totalProteins += p.Proteins * amounts[i] * 4.0
-		totalCarbs += p.Carbs * amounts[i] * 4.0
-		totalFats += p.Fats * amounts[i] * 9.0
-	}
-
-	ok = totalKcals <= overshootKcals && totalKcals >= normKcals &&
-		totalProteins <= overshootProteins && totalProteins >= normProteins &&
-		totalCarbs <= overshootCarbs && totalCarbs >= normCarbs &&
-		totalFats <= overshootFats && totalFats >= normFats
-	if !ok {
-		return []dietEntry{}, false
-	}
-
 	dayDiet := make([]dietEntry, len(products))
 
 	for i, amount := range amounts {
@@ -260,6 +263,16 @@ func dayDiet(products []product) ([]dietEntry, bool) {
 			Amount: amount,
 		}
 		dayDiet[i] = p
+	}
+
+	totalKcals, totalProteins, totalCarbs, totalFats := totalMacronutrients(dayDiet, false)
+
+	ok = totalKcals <= overshootKcals && totalKcals >= normKcals &&
+		totalProteins <= overshootProteins && totalProteins >= normProteins &&
+		totalCarbs <= overshootCarbs && totalCarbs >= normCarbs &&
+		totalFats <= overshootFats && totalFats >= normFats
+	if !ok {
+		return []dietEntry{}, false
 	}
 
 	return dayDiet, true
@@ -377,6 +390,7 @@ func main() {
 	productFlag := flag.String("product", "", "Use with `-diet` and `-consumed` flags to add a product and consumed amount for today")
 	consumedFlag := flag.Float64("consumed", defaultFloat, "Use with `-diet` and `-product` flags to add a product and consumed amount for today")
 	resetConsumedFlag := flag.Bool("reset-consumed", false, "Use with `-diet` flag to reset all consumed amounts")
+	totalFlag := flag.Bool("total", false, "Use with `-diet` command to see total nutrients for today")
 
 	flag.Parse()
 
@@ -561,6 +575,24 @@ func main() {
 		}
 
 		return
+
+	} else if len(*dietFlag) > 0 && *totalFlag {
+
+		*dietFlag = filepath.Clean(*dietFlag)
+
+		diet, ok := getDiet(*dietFlag, products)
+		if !ok {
+			return
+		}
+
+		today := weekDay()
+
+		totalKcals, totalProteins, totalCarbs, totalFats := totalMacronutrients(diet[today], true)
+
+		fmt.Printf("Kcals: %f\n", totalKcals)
+		fmt.Printf("Proteins: %f\n", totalProteins)
+		fmt.Printf("Carbs: %f\n", totalCarbs)
+		fmt.Printf("Fats: %f\n", totalFats)
 
 	} else if len(*dietFlag) > 0 {
 
