@@ -153,22 +153,20 @@ outer:
 	return rows, columns
 }
 
-func getResult(matrix [][]float64, basicColumns []int, nVariables int) ([]float64, float64, bool) {
+func getResult(matrix [][]float64, saveIndexes []int, nVariables int) ([]float64, float64, bool) {
 
 	variables := make([]float64, nVariables)
 
 	lastRow := len(matrix) - 1
 	lastColumn := len(matrix[0]) - 1
 
-	for i := range basicColumns {
+	for i, j := range saveIndexes {
 
-		basicColumn := basicColumns[i]
-
-		if basicColumn >= nVariables {
+		if j >= nVariables || j == -1 {
 			continue
 		}
 
-		variables[basicColumn] = matrix[i][lastColumn]
+		variables[j] = matrix[i][lastColumn]
 	}
 
 	return variables, matrix[lastRow][lastColumn], true
@@ -210,8 +208,8 @@ func makeSaveIndexes(basicColumns []int, nConstraints int) []int {
 		indexes[i] = -1
 	}
 
-	for i := range basicColumns {
-		indexes[i] = i
+	for i, j := range basicColumns {
+		indexes[i] = j
 	}
 
 	return indexes
