@@ -53,9 +53,6 @@ type product struct {
 	Manganese  float64
 	Zinc       float64
 
-	Omega3 float64
-	Omega6 float64
-
 	name string
 }
 
